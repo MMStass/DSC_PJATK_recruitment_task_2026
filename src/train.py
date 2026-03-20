@@ -45,10 +45,10 @@ def train_stratified_xgb_with_te(
             verbose=False
         )
 
-        preds_trial = model.predict_proba(X_val)[:, 1]
-        oof_preds[val_idx] = preds_trial
+        preds_proba = model.predict_proba(X_val)[:, 1]
+        oof_preds[val_idx] = preds_proba
 
-        fold_auc = roc_auc_score(y_val, preds_trial)
+        fold_auc = roc_auc_score(y_val, preds_proba)
         fold_scores.append(fold_auc)
         models.append(model)
 
