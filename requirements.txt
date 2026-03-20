@@ -53,3 +53,4 @@ tzdata==2025.3
 wcwidth==0.6.0
 lightgbm==4.6.0
 optuna==4.8.0
+xgboost==3.2.0
