@@ -1,5 +1,6 @@
+import numpy as np
 import pandas as pd
-from sklearn.preprocessing import TargetEncoder, KBinsDiscretizer
+from sklearn.preprocessing import KBinsDiscretizer
 import itertools
 
 def load_data(path_to_raw_data: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -10,11 +11,29 @@ def load_data(path_to_raw_data: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 def get_feature_pairs(columns: list) -> list[tuple[str, str]]:
     return list(itertools.combinations(columns, 2))
 
-def make_categorical_interaction_features(data: pd.DataFrame, columns: list[tuple[str, str]]) -> pd.DataFrame:
-    return
+def make_categorical_interaction_features(data: pd.DataFrame, pairs: list[tuple[str, str]]) -> pd.DataFrame:
+    categorical_interaction_features = {}
+    for pair in pairs:
+        name = f"{pair[0]}_{pair[1]}"
+        categorical_interaction_features[name] = data[pair[0],pair[1]].astype(str).agg('_'.join, axis=1)
+    return pd.DataFrame(categorical_interaction_features)
 
-def make_numerical_interaction_features(data: pd.DataFrame, columns: list[tuple[str, str]]) -> pd.DataFrame:
-    return
+def make_numerical_interaction_features(data: pd.DataFrame, pairs: list[tuple[str, str]], operator: str) -> pd.DataFrame:
+    numerical_interaction_features = {}
+    if operator not in ['+','-','*','/']:
+        raise Exception("Invalid operator. Must be '+' or '-' or '*' or '/'")
+    for pair in pairs:
+        name = f"{pair[0]}{operator}{pair[1]}"
+        match operator:
+            case '+':
+                numerical_interaction_features[name] = data[pair[0]] + data[pair[1]]
+            case '-':
+                numerical_interaction_features[name] = data[pair[0]] - data[pair[1]]
+            case '*':
+                numerical_interaction_features[name] = data[pair[0]] * data[pair[1]]
+            case '/':
+                numerical_interaction_features[name] = ((data[pair[0]] / data[pair[1]])
+                                                        .replace([np.inf, -np.inf], np.nan)) #potencjalnie sus np.nan
 
 def determine_high_cardinality_features(data: pd.DataFrame, columns: list, threshold: int) -> list[str]:
     result = []
@@ -26,7 +45,7 @@ def determine_high_cardinality_features(data: pd.DataFrame, columns: list, thres
 def make_count_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
     count_features = {}
     for column in columns:
-        name = f"{column}_count"
+        name = f"CE_{column}"
         count_features[name] = data.groupby(column, dropna=False).transform('size')
     return pd.DataFrame(count_features)
 
@@ -49,7 +68,6 @@ def make_quantile_binned_features(data: pd.DataFrame, columns: list, n_bins: int
         quantile_binned_features[name] = pd.qcut(data[column], q=n_bins, duplicates='drop')
     return pd.DataFrame(quantile_binned_features)
 
-
 def make_uniform_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
     quantile_binned_features = {}
     for column in columns:
@@ -65,7 +83,8 @@ def make_kmeans_binned_features(data: pd.DataFrame, columns: list, n_bins: int) 
         kmeans_binned_features[name] = discretizer.fit_transform(data[[column]]).ravel()
     return pd.DataFrame(kmeans_binned_features, index=data.index)
 
-
+def mark_for_target_encoding(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+    return data[columns].add_prefix('TE_')
 
 
 
