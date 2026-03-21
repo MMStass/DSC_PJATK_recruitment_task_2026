@@ -6,7 +6,7 @@ from sklearn.metrics import roc_auc_score
 import gc
 import os
 
-LOG_FILE = 'experiment_logs.csv'
+LOG_FILE = '../experiment_logs.csv'
 
 def log_experiment(experiment_name, cv_score, num_features, notes = ""):
     log_entry = pd.DataFrame([{
