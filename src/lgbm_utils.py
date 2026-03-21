@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import TargetEncoder
+from src import features as fe
 import itertools
 
 
@@ -13,74 +14,55 @@ def build_all_features(train_df, test_df, orig_df):
         test_df
     ])
 
-    # A. Domain Knowledge
+    # 1.Domain Knowledge
     combined['default_risk'] = (combined['debt_to_income_ratio'] * 0.40 +
                                 (850 - combined['credit_score']) / 850 * 0.35 +
                                 combined['interest_rate'] / 100 * 0.25)
 
-    # B. Modulo
-    for c in ['annual_income', 'loan_amount']:
-        for k in range(-2, 2):
-            n = f'{c}_d{k}'
-            combined[n] = ((combined[c] * 10 ** k) % 10).fillna(-1).astype("int8")
+    # 2.Binning
+    qcut_cols = ['loan_amount', 'annual_income']
+    qcut_df = fe.make_quantile_binned_features(combined, qcut_cols, n_bins=10000)
+    cut_df = fe.make_uniform_binned_features(combined, qcut_cols, n_bins=10000)
 
-    # C. Binning
-    print("Applying binning...")
-    combined['loan_amount_qcut'] = pd.qcut(combined['loan_amount'], q=10000, duplicates='drop').astype(str)
-    combined['annual_income_qcut'] = pd.qcut(combined['annual_income'], q=10000, duplicates='drop').astype(str)
-    combined['loan_amount_cut'] = pd.cut(combined['loan_amount'], bins=10000).astype(str)
-    combined['annual_income_cut'] = pd.cut(combined['annual_income'], bins=10000).astype(str)
+    combined = pd.concat([combined, qcut_df, cut_df], axis=1)
 
-    # D. Deep Digit Extraction
-    print("Extracting digits and creating combinations...")
-    digits_df = pd.DataFrame(index=combined.index)
-    float_cols = ['annual_income', 'debt_to_income_ratio', 'loan_amount', 'interest_rate']
-
-    for col in float_cols:
-        splitted = combined[col].astype(str).str.split(".", expand=True)
-        non_decimal = splitted[0]
-        decimal = splitted[1].fillna('0')
-
-        max_len_non_dec = non_decimal.str.len().max()
-        max_len_dec = decimal.str.len().max()
-
-        non_dec_padded = non_decimal.str.rjust(max_len_non_dec, '0')
-        dec_padded = decimal.str.ljust(max_len_dec, '0')
-
-        for i in range(max_len_non_dec):
-            digits_df[f"{col}_int_digit_{i}"] = non_dec_padded.str[i]
-        for i in range(max_len_dec):
-            digits_df[f"{col}_dec_digit_{i}"] = dec_padded.str[i]
-
-    # Add digit combinations for interest_rate
-    ir_cols = [c for c in digits_df.columns if "interest_rate" in c]
-    for cols in itertools.combinations(ir_cols, 2):
-        comb_name = f"{cols[0]}_{cols[1]}_comb"
-        digits_df[comb_name] = digits_df[cols[0]].astype(str) + "_" + digits_df[cols[1]].astype(str)
-
-    combined = pd.concat([combined, digits_df], axis=1)
-
-    # E. Density Ratios
-    print("Calculating count ratios...")
+    # 3.Count Features
     high_card_cols = ['employment_status', 'loan_purpose', 'grade_subgrade']
-    count_ratios = {}
+    count_df = fe.make_count_features(combined, high_card_cols)
+    combined = pd.concat([combined, count_df], axis=1)
 
-    for col in high_card_cols:
-        synth_counts = combined.groupby(col, dropna=False).transform('size')
-        orig_counts_map = orig_df.groupby(col, dropna=False).size()
-        orig_counts = combined[col].map(orig_counts_map).fillna(1)
-        count_ratios[f'{col}_count_ratio'] = synth_counts / orig_counts
+    # 4.Aggregate Features
+    agg_df_1 = fe.make_aggregate_features(combined, 'grade_subgrade', 'loan_amount', ['mean', 'std'])
+    agg_df_2 = fe.make_aggregate_features(combined, 'employment_status', 'annual_income', ['mean', 'median'])
+    combined = pd.concat([combined, agg_df_1, agg_df_2], axis=1)
 
-    ratios_df = pd.DataFrame(count_ratios, index=combined.index)
+    # 5.Deep Digit Extraction & Combinations
+    print("Extracting digits...")
+    float_cols = ['annual_income', 'debt_to_income_ratio', 'loan_amount', 'interest_rate']
+    digits_df = fe.make_deep_digits_features(combined, float_cols)
+
+    # Combinations for interest rate digits
+    ir_cols = [c for c in digits_df.columns if "interest_rate" in c]
+    ir_pairs = fe.get_feature_pairs(ir_cols)
+    digits_comb_df = fe.make_categorical_interaction_features(digits_df, ir_pairs)
+
+    combined = pd.concat([combined, digits_df, digits_comb_df], axis=1)
+
+    # 6. Modular Density Ratios
+    print("Calculating count ratios...")
+    ratios_df = fe.make_density_ratio_features(combined, orig_df, high_card_cols)
     combined = pd.concat([combined, ratios_df], axis=1)
 
-    # Split back
+    # --- Split back to Train/Test ---
     X_train_full = combined.iloc[:len(train_df)].copy()
     X_test_full = combined.iloc[len(train_df):].copy()
 
     # F. Map Original TE
-    te_columns = high_card_cols + ['loan_amount_qcut', 'annual_income_qcut', 'loan_amount_cut',
-                                   'annual_income_cut'] + list(digits_df.columns)
+    te_columns = (high_card_cols +
+                  list(qcut_df.columns) +
+                  list(cut_df.columns) +
+                  list(digits_df.columns) +
+                  list(digits_comb_df.columns))
 
     print("Mapping original TE...")
     orig_te_mapped_train = pd.DataFrame(index=X_train_full.index)
@@ -94,10 +76,12 @@ def build_all_features(train_df, test_df, orig_df):
     X_train_full = pd.concat([X_train_full, orig_te_mapped_train], axis=1)
     X_test_full = pd.concat([X_test_full, orig_te_mapped_test], axis=1)
 
+    # Clean up standard text columns
     cols_to_drop = ['gender', 'marital_status', 'education_level']
     X_train_full = X_train_full.drop(columns=cols_to_drop)
     X_test_full = X_test_full.drop(columns=cols_to_drop)
 
+    # Convert to native LGBM category types
     for c in te_columns:
         X_train_full[c] = X_train_full[c].astype('category')
         X_test_full[c] = X_test_full[c].astype('category')
