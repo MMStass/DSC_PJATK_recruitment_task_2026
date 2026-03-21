@@ -15,7 +15,8 @@ def make_categorical_interaction_features(data: pd.DataFrame, pairs: list[tuple[
     categorical_interaction_features = {}
     for pair in pairs:
         name = f"{pair[0]}_{pair[1]}"
-        categorical_interaction_features[name] = data[pair[0],pair[1]].astype(str).agg('_'.join, axis=1)
+        # Poprawka: podwójne nawiasy kwadratowe dla listy kolumn
+        categorical_interaction_features[name] = data[[pair[0],pair[1]]].astype(str).agg('_'.join, axis=1)
     return pd.DataFrame(categorical_interaction_features)
 
 def make_numerical_interaction_features(data: pd.DataFrame, pairs: list[tuple[str, str]], operator: str) -> pd.DataFrame:
@@ -34,6 +35,9 @@ def make_numerical_interaction_features(data: pd.DataFrame, pairs: list[tuple[st
             case '/':
                 numerical_interaction_features[name] = ((data[pair[0]] / data[pair[1]])
                                                         .replace([np.inf, -np.inf], np.nan)) #potencjalnie sus np.nan
+
+    # Poprawka: dodany brakujący return
+    return pd.DataFrame(numerical_interaction_features)
 
 def determine_high_cardinality_features(data: pd.DataFrame, columns: list, threshold: int) -> list[str]:
     result = []
@@ -86,5 +90,37 @@ def make_kmeans_binned_features(data: pd.DataFrame, columns: list, n_bins: int) 
 def mark_for_target_encoding(data: pd.DataFrame, columns: list) -> pd.DataFrame:
     return data[columns].add_prefix('TE_')
 
+def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+    digits_features = {}
 
+    for col in columns:
+        splitted = data[col].astype(str).str.split('.', expand = True)
+        non_decimal = splitted[0]
+        decimal = splitted[1].fillna('0')
+
+        max_len_non_dec = non_decimal.str.len().max()
+        max_len_dec = decimal.str.len().max()
+
+        non_dec_padded = non_decimal.str.rjust(max_len_non_dec, '0')
+        dec_padded = decimal.str.ljust(max_len_dec, '0')
+
+        for i in range(max_len_non_dec):
+            digits_features[f"{col}_int_digit_{i}"] = non_dec_padded.str[i]
+        for i in range(max_len_dec):
+            digits_features[f"{col}_dec_digit_{i}"] = dec_padded.str[i]
+
+    return pd.DataFrame(digits_features, index=data.index)
+
+def make_density_ratio_features(data: pd.DataFrame, original_data: pd.Dataframe, columns: list) -> pd.DataFrame:
+    density_ratio_features = {}
+
+    for col in columns:
+        synth_counts = data.groupby(col, dropna = False).transform('size')
+        orig_counts_map = original_data.groupby(col, dropna = False).size()
+        orig_counts = data[col].map(orig_counts_map).fillna(1) # Zabezpieczenie przed dzieleniem przez 0
+
+        name = f"{col}_count_ratio"
+        density_ratio_features[name] = synth_counts / orig_counts
+
+    return pd.DataFrame(density_ratio_features, index=data.index)
 
