@@ -111,7 +111,8 @@ def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame
 
     return pd.DataFrame(digits_features, index=data.index)
 
-def make_density_ratio_features(data: pd.DataFrame, original_data: pd.Dataframe, columns: list) -> pd.DataFrame:
+# Poprawka: DataFrame zamiast Dataframe
+def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame, columns: list) -> pd.DataFrame:
     density_ratio_features = {}
 
     for col in columns:
