@@ -19,12 +19,15 @@ def build_all_features(train_df, test_df, orig_df):
                                 (850 - combined['credit_score']) / 850 * 0.35 +
                                 combined['interest_rate'] / 100 * 0.25)
 
-    # 2.Binning
+    # 2.Binning - zaktualizowany o log_cut i trick z zaokrąglaniem
     qcut_cols = ['loan_amount', 'annual_income']
+
     qcut_df = fe.make_quantile_binned_features(combined, qcut_cols, n_bins=10000)
     cut_df = fe.make_uniform_binned_features(combined, qcut_cols, n_bins=10000)
+    log_cut_df = fe.make_log_binned_features(combined, qcut_cols, n_bins=10000)
+    round_half_df = fe.make_rounded_halved_features(combined, qcut_cols)
 
-    combined = pd.concat([combined, qcut_df, cut_df], axis=1)
+    combined = pd.concat([combined, qcut_df, cut_df, log_cut_df, round_half_df], axis=1)
 
     # 3.Count Features
     high_card_cols = ['employment_status', 'loan_purpose', 'grade_subgrade']
@@ -61,7 +64,9 @@ def build_all_features(train_df, test_df, orig_df):
     te_columns = (high_card_cols +
                   list(qcut_df.columns) +
                   list(cut_df.columns) +
-                  list(digits_df.columns) +
+                  list(log_cut_df.columns) +         # Nowe
+                  list(round_half_df.columns) +      # Nowe
+                  #list(digits_df.columns) +
                   list(digits_comb_df.columns))
 
     print("Mapping original TE...")

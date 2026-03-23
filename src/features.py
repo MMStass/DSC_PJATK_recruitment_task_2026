@@ -87,9 +87,26 @@ def make_kmeans_binned_features(data: pd.DataFrame, columns: list, n_bins: int) 
         kmeans_binned_features[name] = discretizer.fit_transform(data[[column]]).ravel()
     return pd.DataFrame(kmeans_binned_features, index=data.index)
 
+# Aplikacja log1p przed nałożeniem równej szerokości koszyków (pewnie trochę gorsze, ale znacznie lżejsze obliczeniowo niż kmeans)
+def make_log_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+    log_binned_features = {}
+    for column in columns:
+        name = f"{column}_log_binned"
+        log_binned_features[name] = pd.cut(np.log1p(data[column]), bins = n_bins, duplicates = 'drop')
+    return pd.DataFrame(log_binned_features)
+
 def mark_for_target_encoding(data: pd.DataFrame, columns: list) -> pd.DataFrame:
     return data[columns].add_prefix('TE_')
 
+#test
+def make_rounded_halved_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+    rounded_features = {}
+    for column in columns:
+        name = f"{column}_round_half"
+        rounded_features[name] = (data[column].astype(float).round() // 2).astype(str)
+    return pd.DataFrame(rounded_features)
+
+# Rzutowanie na typ całkowity, aby ominąć TE
 def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
     digits_features = {}
 
@@ -105,9 +122,9 @@ def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame
         dec_padded = decimal.str.ljust(max_len_dec, '0')
 
         for i in range(max_len_non_dec):
-            digits_features[f"{col}_int_digit_{i}"] = non_dec_padded.str[i]
+            digits_features[f"{col}_int_digit_{i}"] = non_dec_padded.str[i].astype(int)
         for i in range(max_len_dec):
-            digits_features[f"{col}_dec_digit_{i}"] = dec_padded.str[i]
+            digits_features[f"{col}_dec_digit_{i}"] = dec_padded.str[i].astype(int)
 
     return pd.DataFrame(digits_features, index=data.index)
 
