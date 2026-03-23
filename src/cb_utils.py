@@ -1,27 +1,25 @@
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import TargetEncoder
-from src import features as fe
+import src.features as fe
 import itertools
 
 
-def build_all_lgbm_features(train_df, test_df, orig_df):
+def build_all_cb_features(train_df, test_df, orig_df):
     TARGET = 'loan_paid_back'
-    print("Building unified feature space with deep digit extraction...")
+    print("Building CatBoost feature space via modular features.py...")
 
     combined = pd.concat([
         train_df.drop(columns=[TARGET], errors='ignore'),
         test_df
     ])
 
-    # 1.Domain Knowledge
+    # 1. Domain Knowledge
     combined['default_risk'] = (combined['debt_to_income_ratio'] * 0.40 +
                                 (850 - combined['credit_score']) / 850 * 0.35 +
                                 combined['interest_rate'] / 100 * 0.25)
 
-    # 2.Binning - zaktualizowany o log_cut i trick z zaokrąglaniem
+    # 2. Triple Binning & Round Hack
     qcut_cols = ['loan_amount', 'annual_income']
-
     qcut_df = fe.make_quantile_binned_features(combined, qcut_cols, n_bins=10000)
     cut_df = fe.make_uniform_binned_features(combined, qcut_cols, n_bins=10000)
     log_cut_df = fe.make_log_binned_features(combined, qcut_cols, n_bins=10000)
@@ -29,22 +27,21 @@ def build_all_lgbm_features(train_df, test_df, orig_df):
 
     combined = pd.concat([combined, qcut_df, cut_df, log_cut_df, round_half_df], axis=1)
 
-    # 3.Count Features
+    # 3. Modular Count Features
     high_card_cols = ['employment_status', 'loan_purpose', 'grade_subgrade']
     count_df = fe.make_count_features(combined, high_card_cols)
     combined = pd.concat([combined, count_df], axis=1)
 
-    # 4.Aggregate Features
+    # 4. Modular Aggregate Features
     agg_df_1 = fe.make_aggregate_features(combined, 'grade_subgrade', 'loan_amount', ['mean', 'std'])
     agg_df_2 = fe.make_aggregate_features(combined, 'employment_status', 'annual_income', ['mean', 'median'])
     combined = pd.concat([combined, agg_df_1, agg_df_2], axis=1)
 
-    # 5.Deep Digit Extraction & Combinations
+    # 5. Modular Deep Digit Extraction & Combinations
     print("Extracting digits...")
     float_cols = ['annual_income', 'debt_to_income_ratio', 'loan_amount', 'interest_rate']
     digits_df = fe.make_deep_digits_features(combined, float_cols)
 
-    # Combinations for interest rate digits
     ir_cols = [c for c in digits_df.columns if "interest_rate" in c]
     ir_pairs = fe.get_feature_pairs(ir_cols)
     digits_comb_df = fe.make_categorical_interaction_features(digits_df, ir_pairs)
@@ -60,14 +57,13 @@ def build_all_lgbm_features(train_df, test_df, orig_df):
     X_train_full = combined.iloc[:len(train_df)].copy()
     X_test_full = combined.iloc[len(train_df):].copy()
 
-    # F. Map Original TE
-    te_columns = (high_card_cols +
-                  list(qcut_df.columns) +
-                  list(cut_df.columns) +
-                  list(log_cut_df.columns) +         # Nowe
-                  list(round_half_df.columns) +      # Nowe
-                  #list(digits_df.columns) +
-                  list(digits_comb_df.columns))
+    # 7. Map Original Target Encoding
+    cat_columns = (high_card_cols +
+                   list(qcut_df.columns) +
+                   list(cut_df.columns) +
+                   list(log_cut_df.columns) +
+                   list(round_half_df.columns) +
+                   list(digits_comb_df.columns))
 
     print("Mapping original TE...")
     orig_te_mapped_train = pd.DataFrame(index=X_train_full.index)
@@ -86,40 +82,10 @@ def build_all_lgbm_features(train_df, test_df, orig_df):
     X_train_full = X_train_full.drop(columns=cols_to_drop)
     X_test_full = X_test_full.drop(columns=cols_to_drop)
 
-    # Convert to native LGBM category types
-    for c in te_columns:
-        X_train_full[c] = X_train_full[c].astype('category')
-        X_test_full[c] = X_test_full[c].astype('category')
+    # Explicit conversion to string then category for CatBoost
+    for c in cat_columns:
+        if c in X_train_full.columns:
+            X_train_full[c] = X_train_full[c].astype(str).astype('category')
+            X_test_full[c] = X_test_full[c].astype(str).astype('category')
 
-    return X_train_full, X_test_full, train_df[TARGET], te_columns
-
-
-def lgbm_te_preprocessor(X_tr, y_tr, X_va, X_te, columns_to_te):
-    """Specific inside-CV preprocessing for LightGBM with required parameter."""
-    encoder = TargetEncoder(cv=5, random_state=42, smooth=10.0)
-
-    X_tr_te = encoder.fit_transform(X_tr[columns_to_te], y_tr)
-    X_va_te = encoder.transform(X_va[columns_to_te])
-    X_te_te = encoder.transform(X_te[columns_to_te])
-
-    X_tr['TE_row_mean'] = np.mean(X_tr_te, axis=1)
-    X_tr['TE_row_std'] = np.std(X_tr_te, axis=1)
-    X_tr['TE_row_max'] = np.max(X_tr_te, axis=1)
-    X_tr['TE_row_min'] = np.min(X_tr_te, axis=1)
-
-    X_va['TE_row_mean'] = np.mean(X_va_te, axis=1)
-    X_va['TE_row_std'] = np.std(X_va_te, axis=1)
-    X_va['TE_row_max'] = np.max(X_va_te, axis=1)
-    X_va['TE_row_min'] = np.min(X_va_te, axis=1)
-
-    X_te['TE_row_mean'] = np.mean(X_te_te, axis=1)
-    X_te['TE_row_std'] = np.std(X_te_te, axis=1)
-    X_te['TE_row_max'] = np.max(X_te_te, axis=1)
-    X_te['TE_row_min'] = np.min(X_te_te, axis=1)
-
-    # In-place substitution
-    X_tr = X_tr.drop(columns=columns_to_te).assign(**{col: X_tr_te[:, i] for i, col in enumerate(columns_to_te)})
-    X_va = X_va.drop(columns=columns_to_te).assign(**{col: X_va_te[:, i] for i, col in enumerate(columns_to_te)})
-    X_te = X_te.drop(columns=columns_to_te).assign(**{col: X_te_te[:, i] for i, col in enumerate(columns_to_te)})
-
-    return X_tr, X_va, X_te
+    return X_train_full, X_test_full, train_df[TARGET], cat_columns

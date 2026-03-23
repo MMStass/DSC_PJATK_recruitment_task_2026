@@ -4,7 +4,7 @@ import lightgbm as lgb
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
 import gc
-import itertools
+import catboost as cb
 
 
 class ModelWrapper:
@@ -42,6 +42,33 @@ class LightGBMWrapper(ModelWrapper):
             'feature': feature_names,
             'importance': self.model.booster_.feature_importance(importance_type='gain')
         })
+
+class CatBoostWrapper(ModelWrapper):
+    def __init__(self, params, cat_features = None):
+        self.params = params
+        self.cat_features = cat_features
+        self.model = cb.CatBoostClassifier(**self.params)
+
+    def fit(self, X_train, y_train, X_val, y_val):
+        train_pool = cb.Pool(X_train, y_train, cat_features=self.cat_features)
+        val_pool = cb.Pool(X_val, y_val, cat_features=self.cat_features)
+
+        self.model.fit(
+            train_pool,
+            eval_set=val_pool,
+            use_best_model=True
+        )
+
+    def predict_proba(self, X):
+        pool = cb.Pool(X, cat_features=self.cat_features)
+        return self.model.predict_proba(pool)[:,1]
+
+    def get_feature_importances(self, feature_names):
+        return pd.DataFrame({
+            'feature': feature_names,
+            'importance': self.model.get_feature_importance()
+        })
+
 
 def run_universal_cv(X_train, y_train, X_test, model_wrapper, preprocessor_func = None, preprocessor_kwargs=None, n_splits = 5, random_state =42):
     """
