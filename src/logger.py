@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 class ExperimentLogger:
-    def __init__(self, log_dir = 'logs'): # tu wypadałoby ./ścieżka... ale dzisiaj już tego nie będę testował
+    def __init__(self, log_dir = '../logs'):
         self.log_dir = log_dir
         os.makedirs(self.log_dir, exist_ok=True)
         self.summary_file = os.path.join(self.log_dir, 'experiments.csv')
