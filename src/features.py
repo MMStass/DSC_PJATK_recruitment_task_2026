@@ -39,14 +39,14 @@ def make_numerical_interaction_features(data: pd.DataFrame, pairs: list[tuple[st
     # Poprawka: dodany brakujący return
     return pd.DataFrame(numerical_interaction_features)
 
-def determine_high_cardinality_features(data: pd.DataFrame, columns: list, threshold: int) -> list[str]:
+def determine_high_cardinality_features(data: pd.DataFrame, columns: list[str], threshold: int) -> list[str]:
     result = []
     for column in columns:
         if data[column].nunique() > threshold:
             result.append(column)
     return result
 
-def make_count_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_count_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     count_features = {}
     for column in columns:
         name = f"CE_{column}"
@@ -65,21 +65,21 @@ def make_aggregate_features(
         aggregate_features[name] = data.groupby(categorical_column, dropna=False)[numerical_column].transform(function)
     return pd.DataFrame(aggregate_features)
 
-def make_quantile_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_quantile_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     quantile_binned_features = {}
     for column in columns:
         name = f"{column}_quantile_binned"
         quantile_binned_features[name] = pd.qcut(data[column], q=n_bins, duplicates='drop')
     return pd.DataFrame(quantile_binned_features)
 
-def make_uniform_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_uniform_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     quantile_binned_features = {}
     for column in columns:
         name = f"{column}_uniform_binned"
         quantile_binned_features[name] = pd.cut(data[column], bins=n_bins, duplicates='drop')
     return pd.DataFrame(quantile_binned_features)
 
-def make_kmeans_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_kmeans_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     kmeans_binned_features = {}
     discretizer = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='kmeans')
     for column in columns:
@@ -88,18 +88,18 @@ def make_kmeans_binned_features(data: pd.DataFrame, columns: list, n_bins: int) 
     return pd.DataFrame(kmeans_binned_features, index=data.index)
 
 # Aplikacja log1p przed nałożeniem równej szerokości koszyków (pewnie trochę gorsze, ale znacznie lżejsze obliczeniowo niż kmeans)
-def make_log_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_log_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     log_binned_features = {}
     for column in columns:
         name = f"{column}_log_binned"
         log_binned_features[name] = pd.cut(np.log1p(data[column]), bins = n_bins, duplicates = 'drop')
     return pd.DataFrame(log_binned_features)
 
-def mark_for_target_encoding(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def mark_for_target_encoding(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     return data[columns].add_prefix('TE_')
 
 #test
-def make_rounded_halved_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_rounded_halved_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     rounded_features = {}
     for column in columns:
         name = f"{column}_round_half"
@@ -107,7 +107,7 @@ def make_rounded_halved_features(data: pd.DataFrame, columns: list) -> pd.DataFr
     return pd.DataFrame(rounded_features)
 
 # Rzutowanie na typ całkowity, aby ominąć TE
-def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_deep_digits_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     digits_features = {}
 
     for col in columns:
@@ -129,7 +129,7 @@ def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame
     return pd.DataFrame(digits_features, index=data.index)
 
 # Poprawka: DataFrame zamiast Dataframe
-def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     density_ratio_features = {}
 
     for col in columns:
