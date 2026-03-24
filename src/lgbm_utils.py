@@ -96,30 +96,36 @@ def build_all_lgbm_features(train_df, test_df, orig_df):
 
 def lgbm_te_preprocessor(X_tr, y_tr, X_va, X_te, columns_to_te):
     """Specific inside-CV preprocessing for LightGBM with required parameter."""
-    encoder = TargetEncoder(cv=5, random_state=42, smooth=10.0)
+    if columns_to_te is None or len(columns_to_te) == 0:
+        return X_tr, X_va, X_te
 
+    encoder = TargetEncoder(cv=5, shuffle=True, random_state=42)
+
+    # 1. Fit and transform
     X_tr_te = encoder.fit_transform(X_tr[columns_to_te], y_tr)
     X_va_te = encoder.transform(X_va[columns_to_te])
     X_te_te = encoder.transform(X_te[columns_to_te])
 
-    X_tr['TE_row_mean'] = np.mean(X_tr_te, axis=1)
-    X_tr['TE_row_std'] = np.std(X_tr_te, axis=1)
-    X_tr['TE_row_max'] = np.max(X_tr_te, axis=1)
-    X_tr['TE_row_min'] = np.min(X_tr_te, axis=1)
+    # 2. Create optimized DataFrames from numpy arrays
+    df_tr_te = pd.DataFrame(X_tr_te, columns=columns_to_te, index=X_tr.index)
+    df_va_te = pd.DataFrame(X_va_te, columns=columns_to_te, index=X_va.index)
+    df_te_te = pd.DataFrame(X_te_te, columns=columns_to_te, index=X_te.index)
 
-    X_va['TE_row_mean'] = np.mean(X_va_te, axis=1)
-    X_va['TE_row_std'] = np.std(X_va_te, axis=1)
-    X_va['TE_row_max'] = np.max(X_va_te, axis=1)
-    X_va['TE_row_min'] = np.min(X_va_te, axis=1)
+    # 3. Drop original category columns to avoid duplication
+    X_tr_clean = X_tr.drop(columns=columns_to_te)
+    X_va_clean = X_va.drop(columns=columns_to_te)
+    X_te_clean = X_te.drop(columns=columns_to_te)
 
-    X_te['TE_row_mean'] = np.mean(X_te_te, axis=1)
-    X_te['TE_row_std'] = np.std(X_te_te, axis=1)
-    X_te['TE_row_max'] = np.max(X_te_te, axis=1)
-    X_te['TE_row_min'] = np.min(X_te_te, axis=1)
+    # 4. Concat efficiently
+    X_tr_final = pd.concat([X_tr_clean, df_tr_te], axis=1)
+    X_va_final = pd.concat([X_va_clean, df_va_te], axis=1)
+    X_te_final = pd.concat([X_te_clean, df_te_te], axis=1)
 
-    # In-place substitution
-    X_tr = X_tr.drop(columns=columns_to_te).assign(**{col: X_tr_te[:, i] for i, col in enumerate(columns_to_te)})
-    X_va = X_va.drop(columns=columns_to_te).assign(**{col: X_va_te[:, i] for i, col in enumerate(columns_to_te)})
-    X_te = X_te.drop(columns=columns_to_te).assign(**{col: X_te_te[:, i] for i, col in enumerate(columns_to_te)})
+    # 5. Row-level aggregation
+    agg_list = ['mean', 'std', 'min', 'max']
+    for agg in agg_list:
+        X_tr_final[f'TE_row_{agg}'] = X_tr_final[columns_to_te].agg(agg, axis=1)
+        X_va_final[f'TE_row_{agg}'] = X_va_final[columns_to_te].agg(agg, axis=1)
+        X_te_final[f'TE_row_{agg}'] = X_te_final[columns_to_te].agg(agg, axis=1)
 
-    return X_tr, X_va, X_te
+    return X_tr_final, X_va_final, X_te_final
