@@ -5,10 +5,10 @@ from itertools import combinations
 
 def build_all_xgb_features(train_df, test_df, orig_df):
     TARGET = 'loan_paid_back'
-    print("Building XGBoost feature space via modular features.py...")
+    print("Building clean XGBoost feature space with Pseudo-TE...")
 
     combined = pd.concat([
-        train_df.drop(columns=[TARGET], errors = 'ignore'),
+        train_df.drop(columns=[TARGET], errors='ignore'),
         test_df
     ])
 
@@ -42,56 +42,16 @@ def build_all_xgb_features(train_df, test_df, orig_df):
 
     base_cat_cols = high_card_cols + list(round_half_df.columns)
 
-    # 5. Interactions with Cardinality Dropout
-    print("Building aggressive interactions with cardinality dropout...")
-    interaction_cols = []
-    new_interactions = {}
-
-    # 5a. Base categorical pairs
-    for cols in combinations(base_cat_cols, 2):
-        name = '-'.join(cols)
-        temp_series = combined[cols[0]].astype(str) + '_' + combined[cols[1]].astype(str)
-
-        factorized, _ = pd.factorize(temp_series)
-        if pd.Series(factorized).nunique() > len(factorized) // 2:
-            continue
-
-        new_interactions[name] = factorized
-        interaction_cols.append(name)
-
-    # 5b. Aggressive Digit Interactions (Pairs and Triples)
-    important_digits = [c for c in digits_df.columns if 'digit_0' in c or 'digit_1' in c]
-
-    for r in [2, 3]:
-        for cols in combinations(important_digits, r):
-            name = '-'.join(cols)
-
-            temp_series = combined[cols[0]].astype(str)
-            for col in cols[1:]:
-                temp_series += '_' + combined[col].astype(str)
-
-            factorized, _ = pd.factorize(temp_series)
-
-            if pd.Series(factorized).nunique() > len(factorized) // 2:
-                continue
-
-            new_interactions[name] = factorized
-            interaction_cols.append(name)
-
-    if new_interactions:
-        interactions_df = pd.DataFrame(new_interactions, index=combined.index)
-        combined = pd.concat([combined, interactions_df], axis=1)
-
-    # 6. Split back to Train/Test before mapping original statistics
+    # 5. Split back to Train/Test before mapping original statistics
     X_train_full = combined.iloc[:len(train_df)].copy()
     X_test_full = combined.iloc[len(train_df):].copy()
 
-    # 7. Map Original Target Encoding & Pseudo-Target Encoding
+    # 6. Map Original Target Encoding & Pseudo-Target Encoding
     print("Mapping Original TE & Pseudo-TE...")
     orig_te_mapped_train = pd.DataFrame(index=X_train_full.index)
     orig_te_mapped_test = pd.DataFrame(index=X_test_full.index)
 
-    pseudo_targets = ['debt_to_income_ratio', 'interest_rate']
+    pseudo_targets = ['debt_to_income_ratio', 'interest_rate', 'annual_income', 'loan_amount']
 
     for col in base_cat_cols:
         orig_mean = orig_df.groupby(col)[TARGET].mean()
@@ -111,11 +71,15 @@ def build_all_xgb_features(train_df, test_df, orig_df):
                      list(qcut_df.columns) +
                      list(cut_df.columns) +
                      list(log_cut_df.columns) +
-                     list(round_half_df.columns) +
-                     interaction_cols)
+                     list(round_half_df.columns))
 
     cols_to_drop = ['gender', 'marital_status', 'education_level']
     X_train_full = X_train_full.drop(columns=cols_to_drop, errors='ignore')
     X_test_full = X_test_full.drop(columns=cols_to_drop, errors='ignore')
+
+    for c in columns_to_te:
+        if c in X_train_full.columns:
+            X_train_full[c] = X_train_full[c].astype(str).astype('category')
+            X_test_full[c] = X_test_full[c].astype(str).astype('category')
 
     return X_train_full, X_test_full, train_df[TARGET], columns_to_te
