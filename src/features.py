@@ -1,3 +1,5 @@
+from typing import Union
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import KBinsDiscretizer
@@ -96,7 +98,10 @@ def make_log_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int
     return pd.DataFrame(log_binned_features)
 
 def mark_for_target_encoding(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
-    return data[columns].add_prefix('TE_')
+    df = data.copy()
+    mapping = {col: f"TE_{col}" for col in columns}
+    df = df.rename(columns=mapping)
+    return df
 
 #test
 def make_rounded_halved_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
@@ -111,9 +116,9 @@ def make_deep_digits_features(data: pd.DataFrame, columns: list[str]) -> pd.Data
     digits_features = {}
 
     for col in columns:
-        splitted = data[col].astype(str).str.split('.', expand = True)
-        non_decimal = splitted[0]
-        decimal = splitted[1].fillna('0')
+        split = data[col].astype(str).str.split('.', expand = True)
+        non_decimal = split[0]
+        decimal = split[1].fillna('0')
 
         max_len_non_dec = non_decimal.str.len().max()
         max_len_dec = decimal.str.len().max()
@@ -141,4 +146,16 @@ def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame,
         density_ratio_features[name] = synth_counts / orig_counts
 
     return pd.DataFrame(density_ratio_features, index=data.index)
+
+def mark_as_pseudo_targets(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    df = data.copy()
+    mapping = {col: f"PT_{col}" for col in columns}
+    df = df.rename(columns=mapping)
+    return df
+
+def make_custom_binned_feature(data: pd.DataFrame, column: str, bins: list[Union[int,float]]) -> pd.DataFrame:
+    name = f"{column}_custom_binned"
+    df = pd.DataFrame()
+    df[name] = pd.cut(data[column], bins=bins, duplicates='drop')
+    return df
 
