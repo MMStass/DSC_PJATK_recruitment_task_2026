@@ -1,12 +1,21 @@
+from typing import Union
+
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import KBinsDiscretizer
 import itertools
 
-def load_data(path_to_raw_data: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    train = pd.read_csv(f'{path_to_raw_data}/train.csv', index_col='id')
-    test = pd.read_csv(f'{path_to_raw_data}/test.csv', index_col='id')
-    return train, test
+def load_data(path_to_data_folder: str, file_type='csv') -> tuple[pd.DataFrame, pd.DataFrame]:
+    if file_type == 'csv':
+        train = pd.read_csv(f'{path_to_data_folder}/train.csv', index_col='id')
+        test = pd.read_csv(f'{path_to_data_folder}/test.csv', index_col='id')
+        return train, test
+    elif file_type == 'parquet':
+        train = pd.read_parquet(f'{path_to_data_folder}/FE_train.parquet')
+        test = pd.read_parquet(f'{path_to_data_folder}/FE_test.parquet')
+        return train, test
+    else:
+        raise Exception("Invalid file type. Must be csv or parquet.")
 
 def get_feature_pairs(columns: list) -> list[tuple[str, str]]:
     return list(itertools.combinations(columns, 2))
@@ -39,14 +48,14 @@ def make_numerical_interaction_features(data: pd.DataFrame, pairs: list[tuple[st
     # Poprawka: dodany brakujący return
     return pd.DataFrame(numerical_interaction_features)
 
-def determine_high_cardinality_features(data: pd.DataFrame, columns: list, threshold: int) -> list[str]:
+def determine_high_cardinality_features(data: pd.DataFrame, columns: list[str], threshold: int) -> list[str]:
     result = []
     for column in columns:
         if data[column].nunique() > threshold:
             result.append(column)
     return result
 
-def make_count_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_count_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     count_features = {}
     for column in columns:
         name = f"CE_{column}"
@@ -65,21 +74,21 @@ def make_aggregate_features(
         aggregate_features[name] = data.groupby(categorical_column, dropna=False)[numerical_column].transform(function)
     return pd.DataFrame(aggregate_features)
 
-def make_quantile_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_quantile_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     quantile_binned_features = {}
     for column in columns:
         name = f"{column}_quantile_binned"
         quantile_binned_features[name] = pd.qcut(data[column], q=n_bins, duplicates='drop')
     return pd.DataFrame(quantile_binned_features)
 
-def make_uniform_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_uniform_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     quantile_binned_features = {}
     for column in columns:
         name = f"{column}_uniform_binned"
         quantile_binned_features[name] = pd.cut(data[column], bins=n_bins, duplicates='drop')
     return pd.DataFrame(quantile_binned_features)
 
-def make_kmeans_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_kmeans_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     kmeans_binned_features = {}
     discretizer = KBinsDiscretizer(n_bins=n_bins, encode='ordinal', strategy='kmeans')
     for column in columns:
@@ -88,18 +97,21 @@ def make_kmeans_binned_features(data: pd.DataFrame, columns: list, n_bins: int) 
     return pd.DataFrame(kmeans_binned_features, index=data.index)
 
 # Aplikacja log1p przed nałożeniem równej szerokości koszyków (pewnie trochę gorsze, ale znacznie lżejsze obliczeniowo niż kmeans)
-def make_log_binned_features(data: pd.DataFrame, columns: list, n_bins: int) -> pd.DataFrame:
+def make_log_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     log_binned_features = {}
     for column in columns:
         name = f"{column}_log_binned"
         log_binned_features[name] = pd.cut(np.log1p(data[column]), bins = n_bins, duplicates = 'drop')
     return pd.DataFrame(log_binned_features)
 
-def mark_for_target_encoding(data: pd.DataFrame, columns: list) -> pd.DataFrame:
-    return data[columns].add_prefix('TE_')
+def mark_for_target_encoding(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    df = data.copy()
+    mapping = {col: f"TE_{col}" for col in columns}
+    df = df.rename(columns=mapping)
+    return df
 
 #test
-def make_rounded_halved_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_rounded_halved_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     rounded_features = {}
     for column in columns:
         name = f"{column}_round_half"
@@ -107,13 +119,13 @@ def make_rounded_halved_features(data: pd.DataFrame, columns: list) -> pd.DataFr
     return pd.DataFrame(rounded_features)
 
 # Rzutowanie na typ całkowity, aby ominąć TE
-def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_deep_digits_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     digits_features = {}
 
     for col in columns:
-        splitted = data[col].astype(str).str.split('.', expand = True)
-        non_decimal = splitted[0]
-        decimal = splitted[1].fillna('0')
+        split = data[col].astype(str).str.split('.', expand = True)
+        non_decimal = split[0]
+        decimal = split[1].fillna('0')
 
         max_len_non_dec = non_decimal.str.len().max()
         max_len_dec = decimal.str.len().max()
@@ -129,7 +141,7 @@ def make_deep_digits_features(data: pd.DataFrame, columns: list) -> pd.DataFrame
     return pd.DataFrame(digits_features, index=data.index)
 
 # Poprawka: DataFrame zamiast Dataframe
-def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame, columns: list) -> pd.DataFrame:
+def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     density_ratio_features = {}
 
     for col in columns:
@@ -141,4 +153,16 @@ def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame,
         density_ratio_features[name] = synth_counts / orig_counts
 
     return pd.DataFrame(density_ratio_features, index=data.index)
+
+def mark_as_pseudo_targets(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    df = data.copy()
+    mapping = {col: f"PT_{col}" for col in columns}
+    df = df.rename(columns=mapping)
+    return df
+
+def make_custom_binned_feature(data: pd.DataFrame, column: str, bins: list[Union[int,float]]) -> pd.DataFrame:
+    name = f"{column}_custom_binned"
+    df = pd.DataFrame()
+    df[name] = pd.cut(data[column], bins=bins, duplicates='drop')
+    return df
 
