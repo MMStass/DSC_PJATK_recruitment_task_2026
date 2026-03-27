@@ -5,10 +5,17 @@ import pandas as pd
 from sklearn.preprocessing import KBinsDiscretizer
 import itertools
 
-def load_data(path_to_raw_data: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    train = pd.read_csv(f'{path_to_raw_data}/train.csv', index_col='id')
-    test = pd.read_csv(f'{path_to_raw_data}/test.csv', index_col='id')
-    return train, test
+def load_data(path_to_data_folder: str, file_type='csv') -> tuple[pd.DataFrame, pd.DataFrame]:
+    if file_type == 'csv':
+        train = pd.read_csv(f'{path_to_data_folder}/train.csv', index_col='id')
+        test = pd.read_csv(f'{path_to_data_folder}/test.csv', index_col='id')
+        return train, test
+    elif file_type == 'parquet':
+        train = pd.read_parquet(f'{path_to_data_folder}/FE_train.parquet')
+        test = pd.read_parquet(f'{path_to_data_folder}/FE_test.parquet')
+        return train, test
+    else:
+        raise Exception("Invalid file type. Must be csv or parquet.")
 
 def get_feature_pairs(columns: list) -> list[tuple[str, str]]:
     return list(itertools.combinations(columns, 2))
