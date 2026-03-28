@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import KBinsDiscretizer
 import itertools
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler
 
 def load_data(path_to_data_folder: str, file_type='csv') -> tuple[pd.DataFrame, pd.DataFrame]:
     if file_type == 'csv':
@@ -166,3 +168,88 @@ def make_custom_binned_feature(data: pd.DataFrame, column: str, bins: list[Union
     df[name] = pd.cut(data[column], bins=bins, duplicates='drop')
     return df
 
+def make_financial_risk_features(df: pd.DataFrame) -> pd.DataFrame:
+    df_out = pd.DataFrame(index = df.index)
+
+    # 1. Default risk
+    df_out['default_risk'] = (df['debt_to_income_ratio'] * 0.40 +
+                              (850 - df['credit_score']) / 850 * 0.35 +
+                              df['interest_rate'] / 100 * 0.25)
+
+    # 2. Expected Loss (EL)
+    df_out['expected_loss'] = df['loan_amount'] * df_out['default_risk']
+
+    # 3. Expected Return & Risk-Adjusted Return
+    df_out['expected_return'] = df['loan_amount'] * (df['interest_rate'] / 100)
+    df_out['risk_adjusted_return'] = df_out['expected_return'] - df_out['expected_loss']
+
+    return df_out
+
+def make_demographic_features(df: pd.DataFrame) -> pd.DataFrame:
+    df_out = pd.DataFrame(index = df.index)
+
+    # From 5C framework
+    df_out['character_proxy'] = df['marital_status'].astype(str) + "_" + df['education_level'].astype(str)
+
+    return df_out
+
+def borrow_features_with_knn(train_df, test_df, orig_df, shared_cols, borrow_cols):
+    print("Scaling shared features for KNN...")
+    scaler = StandardScaler()
+
+    orig_scaled = scaler.fit_transform(orig_df[shared_cols].fillna(0))
+    train_scaled = scaler.transform(train_df[shared_cols].fillna(0))
+    test_scaled = scaler.transform(test_df[shared_cols].fillna(0))
+
+    print("Fitting Nearest Neighbors on original data...")
+    nn = NearestNeighbors(n_neighbors=1, n_jobs=-1)
+    nn.fit(orig_scaled)
+
+    print("Querying nearest neighbors for train and test datasets...")
+    train_distances, train_indices = nn.kneighbors(train_scaled)
+    test_distances, test_indices = nn.kneighbors(test_scaled)
+
+    train_out = train_df.copy()
+    test_out = test_df.copy()
+
+    for col in borrow_cols:
+        if col in orig_df.columns:
+            train_out[f'knn_orig_{col}'] = orig_df[col].iloc[train_indices.flatten()].values
+            test_out[f'knn_orig_{col}'] = orig_df[col].iloc[test_indices.flatten()].values
+        else:
+            print(f"Warning: Column {col} not found in orig_df")
+
+    train_out['knn_orig_distance'] = train_distances.flatten()
+    test_out['knn_orig_distance'] = test_distances.flatten()
+
+    return train_out, test_out
+
+def make_custom_scorecard(df: pd.DataFrame) -> pd.DataFrame:
+    df_out = pd.DataFrame(index = df.index)
+    scorecard_points = pd.Series(0, index = df.index, dtype = float)
+
+    # 1. Debt to Income Ratio
+    if 'debt_to_income_ratio' in df.columns:
+        scorecard_points += np.where(df['debt_to_income_ratio'] < 20, 35,
+                            np.where(df['debt_to_income_ratio'] <= 30, 25,
+                            np.where(df['debt_to_income_ratio'] <= 40, 15,
+                            np.where(df['debt_to_income_ratio'] <= 50, 5, 0))))
+
+    # 2. Marital Status
+    if 'marital_status' in df.columns:
+        marital_mapping = {
+            'Single': 10,
+            'Divorced': 15,
+            'Widowed': 15,
+            'Married': 25
+        }
+        mapped_marital = df['marital_status'].map(marital_mapping).fillna(0)
+        scorecard_points += mapped_marital
+
+    if 'knn_orig_age' in df.columns:
+        scorecard_points += np.where(df['knn_orig_age'] < 25, 5,
+                            np.where(df['knn_orig_age'] <= 35, 15,
+                            np.where(df['knn_orig_age'] <= 50, 25, 35)))
+
+    df_out['custom_scorecard_points'] = scorecard_points
+    return df_out
