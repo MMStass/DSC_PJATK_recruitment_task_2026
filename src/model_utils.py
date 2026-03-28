@@ -5,6 +5,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
 import gc
 import catboost as cb
+import xgboost as xgb
 
 
 class ModelWrapper:
@@ -67,6 +68,38 @@ class CatBoostWrapper(ModelWrapper):
         return pd.DataFrame({
             'feature': feature_names,
             'importance': self.model.get_feature_importance()
+        })
+
+
+class XGBoostWrapper(ModelWrapper):
+    def __init__(self, params):
+        self.params = params
+        early_stopping = self.params.pop('early_stopping_rounds', 500)
+        self.verbose_eval = self.params.pop('verbose', 1000)
+        callbacks = [xgb.callback.EvaluationMonitor(period=self.verbose_eval)]
+
+        self.model = xgb.XGBClassifier(
+            early_stopping_rounds=early_stopping,
+            callbacks=callbacks,
+            **self.params
+        )
+
+    def fit(self, X_train, y_train, X_val, y_val):
+        callbacks = [xgb.callback.EvaluationMonitor(period=self.verbose_eval)]
+        self.model.fit(
+            X_train,
+            y_train,
+            eval_set = [(X_val, y_val)],
+            verbose = False
+        )
+
+    def predict_proba(self, X):
+        return self.model.predict_proba(X)[:,1]
+
+    def get_feature_importances(self, feature_names):
+        return pd.DataFrame({
+            'feature': feature_names,
+            'importance': self.model.feature_importances_
         })
 
 

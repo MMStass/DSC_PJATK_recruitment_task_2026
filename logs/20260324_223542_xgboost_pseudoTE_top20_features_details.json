@@ -1,0 +1,38 @@
+{
+    "experiment_id": "20260324_223542_xgboost_pseudoTE_top20_features",
+    "experiment_name": "xgboost_pseudoTE_top20_features",
+    "model": "XGBoost",
+    "cv_score": 0.9202865611449944,
+    "params": {
+        "objective": "binary:logistic",
+        "eval_metric": "auc",
+        "n_estimators": 10000,
+        "learning_rate": 0.01,
+        "max_depth": 6,
+        "subsample": 0.8,
+        "colsample_bytree": 0.5,
+        "tree_method": "hist",
+        "device": "cuda",
+        "random_state": 42
+    },
+    "features": [
+        "debt_to_income_ratio",
+        "credit_score",
+        "employment_status",
+        "default_risk",
+        "CE_employment_status",
+        "employment_status-loan_purpose",
+        "employment_status-grade_subgrade",
+        "debt_to_income_ratio_dec_digit_0-debt_to_income_ratio_dec_digit_1",
+        "annual_income_dec_digit_1-debt_to_income_ratio_dec_digit_0-debt_to_income_ratio_dec_digit_1",
+        "debt_to_income_ratio_int_digit_0-debt_to_income_ratio_dec_digit_0-debt_to_income_ratio_dec_digit_1",
+        "debt_to_income_ratio_dec_digit_0-debt_to_income_ratio_dec_digit_1-interest_rate_int_digit_0",
+        "debt_to_income_ratio_dec_digit_0-debt_to_income_ratio_dec_digit_1-interest_rate_int_digit_1",
+        "debt_to_income_ratio_dec_digit_0-debt_to_income_ratio_dec_digit_1-interest_rate_dec_digit_0",
+        "debt_to_income_ratio_dec_digit_0-debt_to_income_ratio_dec_digit_1-interest_rate_dec_digit_1",
+        "TE_orig_employment_status",
+        "PseudoTE_debt_to_income_ratio_by_employment_status",
+        "TE_orig_grade_subgrade",
+        "PseudoTE_interest_rate_by_grade_subgrade"
+    ]
+}
