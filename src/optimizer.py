@@ -45,8 +45,23 @@ def objective(trial):
         'bagging_temperature': trial.suggest_float('bagging_temperature', 0.0, 0.5),
     }
 
+    cb_params = {
+        'loss_function': 'Logloss',
+        'eval_metric': 'AUC',
+        'iterations': 10_000,
+        'learning_rate': 0.03,
+        'depth': 6,
+        'l2_leaf_reg': 5.0,
+        'random_seed': 42,
+        'task_type': 'GPU',
+        'early_stopping_rounds': 200,
+        'verbose': 500
+    }
+
+
+
     cats = train.select_dtypes(include=['string']).columns.tolist()
-    model = CatBoostWrapper(model_params, cats)
+    model = CatBoostWrapper(cb_params, cats)
 
 
     _, _, cv_auc, _ = run_cross_validation_loop(
