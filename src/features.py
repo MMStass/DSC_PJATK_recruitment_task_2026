@@ -2,7 +2,8 @@ from typing import Union
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import KBinsDiscretizer
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
 import itertools
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
