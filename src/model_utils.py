@@ -28,7 +28,7 @@ class LightGBMWrapper(ModelWrapper):
             X_train, y_train,
             eval_set=[(X_val, y_val)],
             callbacks=[
-                #lgb.early_stopping(stopping_rounds=200, verbose=False),
+                lgb.early_stopping(stopping_rounds=300, verbose=False),
                 lgb.log_evaluation(1000)
             ]
         )

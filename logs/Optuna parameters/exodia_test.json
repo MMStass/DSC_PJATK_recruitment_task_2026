@@ -1,0 +1,11 @@
+{
+    "study_name": "exodia_test",
+    "best_params": {
+        "learning_rate": 0.011130546239206887,
+        "depth": 5,
+        "l2_leaf_reg": 8.324891541416667,
+        "random_strength": 0.08581646191460457,
+        "bagging_temperature": 0.30420441351168215
+    },
+    "best_value": 0.9247685843292427
+}
