@@ -1,4 +1,4 @@
-import features as fe
+import feature_utils as fe
 import numpy as np
 import pandas as pd
 
@@ -38,16 +38,22 @@ def build_all_cb_features(train_df, test_df, orig_df):
     orig_round_half_df = fe.make_rounded_halved_features(orig_df, qcut_cols)
     orig_df = pd.concat([orig_df, orig_round_half_df], axis=1)
 
-    # 3. Modular Count Features
+    # 4. Modular Count Features
     high_card_cols = ['employment_status', 'loan_purpose', 'grade_subgrade']
     count_df = fe.make_count_features(combined, high_card_cols)
     combined = pd.concat([combined, count_df], axis=1)
 
-    # 4. Deep Digits
+    # 5. Deep Digits
     print("Extracting digits...")
     float_cols = ['annual_income', 'debt_to_income_ratio', 'loan_amount', 'interest_rate']
     digits_df = fe.make_deep_digits_features(combined, float_cols)
     combined = pd.concat([combined, digits_df], axis=1)
+
+    # 5.5 Density Ratios
+    print("Calculating density ratios...")
+    ratio_cols = ['loan_amount', 'annual_income', 'interest_rate', 'debt_to_income_ratio']
+    density_df = fe.make_density_ratio_features(combined, orig_df, ratio_cols)
+    combined = pd.concat([combined, density_df], axis=1)
 
     # 6. Custom Scorecard
     scorecard_df = fe.make_custom_scorecard(combined)
@@ -59,6 +65,7 @@ def build_all_cb_features(train_df, test_df, orig_df):
     X_train_full = combined.iloc[:len(train_df)].copy()
     X_test_full = combined.iloc[len(train_df):].copy()
 
+    # 8. Map Original TE & Pseudo-TE
     print("Mapping Original TE & Pseudo-TE...")
     orig_te_mapped_train = pd.DataFrame(index=X_train_full.index)
     orig_te_mapped_test = pd.DataFrame(index=X_test_full.index)
@@ -66,15 +73,25 @@ def build_all_cb_features(train_df, test_df, orig_df):
     pseudo_targets = ['debt_to_income_ratio', 'interest_rate', 'annual_income', 'loan_amount']
 
     for col in base_cat_cols:
+        # Global mean for the main target
+        global_target_mean = orig_df[TARGET].mean()
         orig_mean = orig_df.groupby(col)[TARGET].mean()
-        orig_te_mapped_train[f'TE_orig_{col}'] = X_train_full[col].map(orig_mean).astype('float32')
-        orig_te_mapped_test[f'TE_orig_{col}'] = X_test_full[col].map(orig_mean).astype('float32')
+
+        orig_te_mapped_train[f'TE_orig_{col}'] = X_train_full[col].map(orig_mean).fillna(global_target_mean).astype(
+            'float32')
+        orig_te_mapped_test[f'TE_orig_{col}'] = X_test_full[col].map(orig_mean).fillna(global_target_mean).astype(
+            'float32')
 
         for p_target in pseudo_targets:
+            # Global mean for the pseudo target
+            global_pseudo_mean = orig_df[p_target].mean()
             pseudo_mean = orig_df.groupby(col)[p_target].mean()
+
             col_name = f'PseudoTE_{p_target}_by_{col}'
-            orig_te_mapped_train[col_name] = X_train_full[col].map(pseudo_mean).astype('float32')
-            orig_te_mapped_test[col_name] = X_test_full[col].map(pseudo_mean).astype('float32')
+            orig_te_mapped_train[col_name] = X_train_full[col].map(pseudo_mean).fillna(global_pseudo_mean).astype(
+                'float32')
+            orig_te_mapped_test[col_name] = X_test_full[col].map(pseudo_mean).fillna(global_pseudo_mean).astype(
+                'float32')
 
     X_train_full = pd.concat([X_train_full, orig_te_mapped_train], axis=1)
     X_test_full = pd.concat([X_test_full, orig_te_mapped_test], axis=1)

@@ -1,5 +1,10 @@
 # References
 
+Competition: https://www.kaggle.com/competitions/forecasting-loan-repayment/overview
+
+Original data: https://www.kaggle.com/datasets/nabihazahid/loan-prediction-dataset-2025
+
+
 Mahog:
 - Article: https://www.kaggle.com/competitions/playground-series-s5e11/writeups/1st-place-a-lot-of-features-a-lot-of-models-an
 - Notebook: https://www.kaggle.com/code/mahoganybuttstrings/pg-s5e11-xgb-cv-0-92818-pb-0-92923

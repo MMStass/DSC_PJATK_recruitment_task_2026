@@ -1,8 +1,6 @@
 import pandas as pd
-import numpy as np
 from sklearn.preprocessing import TargetEncoder
-from src import features as fe
-import itertools
+from src.utils import feature_utils as fe
 
 
 def build_all_lgbm_features(train_df, test_df, orig_df):
@@ -85,7 +83,6 @@ def build_all_lgbm_features(train_df, test_df, orig_df):
     X_train_full = X_train_full.drop(columns=cols_to_drop, errors='ignore')
     X_test_full = X_test_full.drop(columns=cols_to_drop, errors='ignore')
 
-    # Rzutowanie na category przed pętlą (wymagane dla lgbm_te_preprocessor)
     for c in columns_to_te:
         if c in X_train_full.columns:
             X_train_full[c] = X_train_full[c].astype(str).astype('category')

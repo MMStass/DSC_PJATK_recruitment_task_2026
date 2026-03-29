@@ -8,8 +8,8 @@ import itertools
 
 def load_data(path_to_data_folder: str, file_type='csv') -> tuple[pd.DataFrame, pd.DataFrame]:
     if file_type == 'csv':
-        train = pd.read_csv(f'{path_to_data_folder}/train.csv', index_col='id')
-        test = pd.read_csv(f'{path_to_data_folder}/test.csv', index_col='id')
+        train = pd.read_csv(f'{path_to_data_folder}/FE_train.csv', index_col='id')
+        test = pd.read_csv(f'{path_to_data_folder}/FE_test.csv', index_col='id')
         return train, test
     elif file_type == 'parquet':
         train = pd.read_parquet(f'{path_to_data_folder}/FE_train.parquet')
@@ -25,7 +25,6 @@ def make_categorical_interaction_features(data: pd.DataFrame, pairs: list[tuple[
     categorical_interaction_features = {}
     for pair in pairs:
         name = f"{pair[0]}_{pair[1]}"
-        # Poprawka: podwójne nawiasy kwadratowe dla listy kolumn
         categorical_interaction_features[name] = data[[pair[0],pair[1]]].astype(str).agg('_'.join, axis=1)
     return pd.DataFrame(categorical_interaction_features)
 
@@ -46,7 +45,6 @@ def make_numerical_interaction_features(data: pd.DataFrame, pairs: list[tuple[st
                 numerical_interaction_features[name] = ((data[pair[0]] / data[pair[1]])
                                                         .replace([np.inf, -np.inf], np.nan)) #potencjalnie sus np.nan
 
-    # Poprawka: dodany brakujący return
     return pd.DataFrame(numerical_interaction_features)
 
 def determine_high_cardinality_features(data: pd.DataFrame, columns: list[str], threshold: int) -> list[str]:
@@ -97,7 +95,7 @@ def make_kmeans_binned_features(data: pd.DataFrame, columns: list[str], n_bins: 
         kmeans_binned_features[name] = discretizer.fit_transform(data[[column]]).ravel()
     return pd.DataFrame(kmeans_binned_features, index=data.index)
 
-# Aplikacja log1p przed nałożeniem równej szerokości koszyków (pewnie trochę gorsze, ale znacznie lżejsze obliczeniowo niż kmeans)
+
 def make_log_binned_features(data: pd.DataFrame, columns: list[str], n_bins: int) -> pd.DataFrame:
     log_binned_features = {}
     for column in columns:
@@ -111,7 +109,7 @@ def mark_for_target_encoding(data: pd.DataFrame, columns: list[str]) -> pd.DataF
     df = df.rename(columns=mapping)
     return df
 
-#test
+# method for noise reduction by cutting decimal values and further binning
 def make_rounded_halved_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     rounded_features = {}
     for column in columns:
@@ -119,7 +117,8 @@ def make_rounded_halved_features(data: pd.DataFrame, columns: list[str]) -> pd.D
         rounded_features[name] = (data[column].astype(float).round() // 2).astype(str)
     return pd.DataFrame(rounded_features)
 
-# Rzutowanie na typ całkowity, aby ominąć TE
+# generate features consisting of single digits to investigate relationships
+# between them and the target value
 def make_deep_digits_features(data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     digits_features = {}
 
@@ -141,14 +140,14 @@ def make_deep_digits_features(data: pd.DataFrame, columns: list[str]) -> pd.Data
 
     return pd.DataFrame(digits_features, index=data.index)
 
-# Poprawka: DataFrame zamiast Dataframe
+
 def make_density_ratio_features(data: pd.DataFrame, original_data: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     density_ratio_features = {}
 
     for col in columns:
         synth_counts = data.groupby(col, dropna = False).transform('size')
         orig_counts_map = original_data.groupby(col, dropna = False).size()
-        orig_counts = data[col].map(orig_counts_map).fillna(1) # Zabezpieczenie przed dzieleniem przez 0
+        orig_counts = data[col].map(orig_counts_map).fillna(1)
 
         name = f"{col}_count_ratio"
         density_ratio_features[name] = synth_counts / orig_counts
@@ -194,18 +193,15 @@ def make_demographic_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def borrow_features_with_knn(train_df, test_df, orig_df, shared_cols, borrow_cols):
-    print("Scaling shared features for KNN...")
     scaler = StandardScaler()
 
     orig_scaled = scaler.fit_transform(orig_df[shared_cols].fillna(0))
     train_scaled = scaler.transform(train_df[shared_cols].fillna(0))
     test_scaled = scaler.transform(test_df[shared_cols].fillna(0))
 
-    print("Fitting Nearest Neighbors on original data...")
     nn = NearestNeighbors(n_neighbors=1, n_jobs=-1)
     nn.fit(orig_scaled)
 
-    print("Querying nearest neighbors for train and test datasets...")
     train_distances, train_indices = nn.kneighbors(train_scaled)
     test_distances, test_indices = nn.kneighbors(test_scaled)
 
