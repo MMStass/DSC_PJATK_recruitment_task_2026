@@ -15,7 +15,6 @@ class ModelWrapper:
     def predict_proba(self, X):
         pass
     def get_feature_importances(self, feature_names):
-        # Domyślna implementacja dla modeli, które tego nie wspierają
         return None
 
 
@@ -38,7 +37,6 @@ class LightGBMWrapper(ModelWrapper):
         return self.model.predict_proba(X)[:, 1]
 
     def get_feature_importances(self, feature_names):
-        # Gain - specyficzny dla lgbm
         return pd.DataFrame({
             'feature': feature_names,
             'importance': self.model.booster_.feature_importance(importance_type='gain')
@@ -105,7 +103,7 @@ class XGBoostWrapper(ModelWrapper):
 
 def run_universal_cv(X_train, y_train, X_test, model_wrapper, preprocessor_func = None, preprocessor_kwargs=None, n_splits = 5, random_state =42):
     """
-    Universal CV Loop for Stacking generation.
+    Universal CV Loop
     """
     print("Starting Universal CV Loop...")
     skf = StratifiedKFold(n_splits = n_splits, random_state= random_state, shuffle = True)

@@ -1,7 +1,6 @@
 import pandas as pd
-import numpy as np
-import src.features as fe
-from itertools import combinations
+import src.utils.feature_utils as fe
+
 
 def build_all_xgb_features(train_df, test_df, orig_df):
     TARGET = 'loan_paid_back'
