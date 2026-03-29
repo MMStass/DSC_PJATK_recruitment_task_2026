@@ -5,6 +5,8 @@ import pandas as pd
 from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import KBinsDiscretizer, StandardScaler
 import itertools
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import StandardScaler
 
 def load_data(path_to_data_folder: str, file_type='csv') -> tuple[pd.DataFrame, pd.DataFrame]:
     if file_type == 'csv':
@@ -187,10 +189,9 @@ def make_demographic_features(df: pd.DataFrame) -> pd.DataFrame:
     df_out = pd.DataFrame(index = df.index)
 
     # From 5C framework
-    df_out['character_proxy'] = df['marital_status'].astype(str) + "" + df['education_level'].astype(str)
+    df_out['character_proxy'] = df['marital_status'].astype(str) + "_" + df['education_level'].astype(str)
 
     return df_out
-
 
 def borrow_features_with_knn(train_df, test_df, orig_df, shared_cols, borrow_cols):
     scaler = StandardScaler()
