@@ -37,3 +37,6 @@ This notebook handles data cleaning, applies our custom transformations (includi
 ### 3.Model Training and Prediction
 Open and execute all cells in `Notebooks/ML.ipynb`.
 This notebook contains the sequential, modular calls to our logic in the `src/ directory`. It trains the final CatBoost model and logs the experiment. To see the results, navigate to the logs/ directory.
+
+# (PL) Dla organizatorów konkursu
+link do prezentacji: https://docs.google.com/presentation/d/1WydZPS0neLyPusJbuK1YgyHxyAv9UC-qN3Ixd-cOh5k/edit?usp=sharing
